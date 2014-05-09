@@ -1,0 +1,190 @@
+<html>
+<body>
+<head>
+  <meta name="viewport" content="width=device-width, user-scalable=no">
+  <style type="text/css">
+  body{
+    overflow: hidden;
+    background: #333;
+    padding: 0;
+    margin: 0;
+  }
+
+  .target-range{
+    fill: #666;
+    fill-opacity: .3;
+    shape-rendering: crispEdges;
+  }
+
+  .sugar-line{
+    fill: none;
+    stroke: #f7f7f7;
+    stroke-width: 1px;
+    stroke-opacity: .8;
+  }
+
+  .currentDate{
+    stroke-opacity: 1;
+    fill-opacity: 1;
+    stroke: #f00;
+    stroke-width: 2px;
+  }
+
+  .axis {
+    shape-rendering: crispEdges;
+    font-family: arial, sans-serif;
+    font-size: 12px;
+  }
+
+  .y.axis line, .y.axis path {
+    fill: none;
+    stroke: #ddd;
+  }
+
+  .glucose-sample{
+    fill: #f7f7f7;
+
+    fill-opacity: .8;
+  }
+  #date{
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    z-index: 100;
+  }
+  </style>
+</head>
+
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+
+<select id="date">
+</select>
+
+<div id="chart-container">
+  <!-- We'll insert the SVG tag here -->
+</div>
+
+<script type="text/javascript">
+// Establish how big you want the chart to be
+var margin  = { top: 10, right: 0, bottom: 10, left: 0 };
+var width   = $(window).width() - margin.left - margin.right;
+var height  = Math.round((width / 16) * 9) - margin.top - margin.bottom;
+
+var maxSugar = 400;
+var minSugar = 30;
+
+targetMax = 150;
+targetMin = 75;
+
+/*
+We'll create the svg element that will contain our line
+and store it as the svg variable for use later. You'll need to
+tell it how big you want it to be
+
+This uses the margin convention as defined here:
+bl.ocks.org/mbostock/3019563
+
+The margins applied here allow svg elements to have a little padding
+and not exceed the edges.
+*/
+var svg = d3.select('#chart-container').append('svg')
+  .attr('width', width + margin.left + margin.right)
+  .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+      .attr('transform', 'translate('+margin.left+', '+margin.top+')');
+
+/*
+Scales determine where points should go on your chart
+There are many kinds of scales, but the most basic is a linear
+scale.
+
+There are two important points to remember about scales, the domain
+and the range.
+
+Domain: The boundries for the input data
+Example: [ minimum_heartrate: 60, maximum_heartrate: 200 ]
+
+Range: Maps your data to the output position on the chart in pixels
+Example: [ 0, 100 ] <- pixels
+
+*/
+var url = 'https://docs.google.com/spreadsheet/pub?key=0AjQSrT0OcQyIdGxoYTkzNTRCeEgzOTVOdkY4SDdiRFE&single=true&gid=0&output=csv';
+
+d3.csv(url, function(data){
+  var dates = [];
+  data.forEach(function(d){
+    d.glucose = +d.glucose;
+    d.date    = new Date(d.time);
+    d.day     = d.date.getDate();
+    d.utc     = +d.date;
+    d.month   = d.date.getMonth();
+    d.dateStr = d.month+'/'+d.day;
+    dates.push(d.dateStr);
+    d.time    = (d.date.getHours() * 3600) + (d.date.getMinutes() * 60) + d.date.getSeconds();
+  });
+
+  data  = _.sortBy(data, function(d){ return d.utc; });
+  dates = _.uniq(dates).reverse();
+  dates.forEach(function(date){
+    $('#date').append($('<option value="'+date+'">'+date+'</option>'));
+  });
+
+  tests = d3.nest()
+    .key(function(d){ return d.dateStr })
+    .map(_.reject(data, function(d){ return d.glucose == 0 }))
+
+  var x = d3.scale.linear()
+    .domain([0, 86400])
+    .range([0, width]);
+
+  // The Y scale will use the heartrate value
+  var y = d3.scale.linear()
+    .domain([maxSugar, minSugar])
+    .range([0, height]);
+
+  var line = d3.svg.line()
+    .x(function(d) { return x(d.time); })
+    .y(function(d) { return y(d.glucose); })
+    .interpolate("cardinal")
+
+  svg.append('rect')
+    .attr('x', 0)
+    .attr('y', y(targetMax))
+    .attr('width', width)
+    .attr('height', y(targetMin) - y(targetMax))
+    .attr('class', 'target-range')
+
+  svg.selectAll('.sugar-line')
+    .data(_.toArray(tests))
+    .enter()
+      .append('path')
+        .attr('d', line)
+        .attr('class', 'sugar-line')
+        .classed('currentDate', function(d){
+          return d[0].dateStr == dates[0]
+        });
+
+  svg.selectAll('.glucose-sample')
+    .data(data)
+    .enter()
+      .append('circle')
+        .attr('cx', function(d){ return x(d.time); })
+        .attr('cy', function(d){ return y(d.glucose); })
+        .attr('r', 3)
+        .attr('class', 'glucose-sample')
+        .classed('currentDate', function(d){
+          return d.dateStr == dates[0]
+        });
+
+});
+
+
+
+</script>
+
+
+
+</body>
+</html>
